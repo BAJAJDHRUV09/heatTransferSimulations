@@ -14,9 +14,15 @@ function BoundaryLayerSimulation({ onBack }) {
   const [error, setError] = useState(null);
   const [contourType, setContourType] = useState(null); // 'u_x' or 'u_y' or null
 
+  // Define data range constants at component level
+  const xMinData = 0.01;
+  const xMaxData = 5.0;
+  const yMinData = 0.0;
+  const yMaxData = 0.4;
+
   useEffect(() => {
     console.log('Starting data load...');
-    fetch('/contour.csv')
+    fetch('/data.csv')
       .then(response => {
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -194,10 +200,6 @@ function BoundaryLayerSimulation({ onBack }) {
                 const rectWidth = plotAreaWidth / numXGridPoints; // Width per cell
                 const rectHeight = plotAreaHeight / numYGridPoints; // Height per cell
 
-                // Data range for scaling
-                const xMinData = 0.5, xMaxData = 5.0;
-                const yMinData = 0.0, yMaxData = 0.4;
-
                 // Log min/max velocity and color scale ticks for debugging
                 console.log('Contour Color Scale Info:', {
                   minVelocity: minVelocity,
@@ -211,37 +213,14 @@ function BoundaryLayerSimulation({ onBack }) {
                     {/* Iterate through the 800 points and draw a rectangle for each */}
                     {sortedPoints.map((point, i) => {
                         // Calculate the row (j) and column (k) index based on the point's index (i) in the sorted array.
-                        // Data is sorted by y then x, so the first numXGridPoints points are the first row (lowest y), the next numXGridPoints are the second row, and so on.
-                        // Row index j (0 to numYGridPoints - 1, i.e., 0 to 19) increases with point index i every numXGridPoints (40) points.
-                        // Column index k (0 to numXGridPoints - 1, i.e., 0 to 39) cycles from 0 to 39 within each block of 40 points.
                         const j = Math.floor(i / numXGridPoints); // Row index (0 to 19)
                         const k = i % numXGridPoints;       // Column index (0 to 39)
 
+                        // Skip the bottom row (j = 0)
+                        if (j === 0) return null;
+
                         // Calculate the top-left pixel position of the rectangle based on grid index and data mapping.
-                        // X position: Starts at plotAreaXMin (50) and increases with column index k
                         const rectX = plotAreaXMin + k * rectWidth;
-
-                        // Y position: Map data point's y value to SVG y-coordinate range, ensuring inversion.
-                        // Lowest data y (yMinData) should map to bottom of plot area (plotAreaYMin + plotAreaHeight = 550).
-                        // Highest data y (yMaxData) should map to top of plot area (plotAreaYMin = 50).
-                        // rectY = plotAreaYMin + (yMaxData - point.y) / (yMaxData - yMinData) * plotAreaHeight;
-
-                        // Alternatively, using the row index j (0=lowest y, 19=highest y):
-                        // Map data row index j to an SVG row index (0=top SVG y, 19=bottom SVG y).
-                        // SVG row index = numYGridPoints - 1 - j.
-                        // rectY = plotAreaYMin + (numYGridPoints - 1 - j) * rectHeight;
-
-                        // Let's try mapping based on data y value again, but re-verify the calculation:
-                        // The data's y range is [yMinData, yMaxData]. The SVG y range for plotting is [plotAreaYMin, plotAreaYMin + plotAreaHeight].
-                        // We want point.y = yMinData to map to rectY = plotAreaYMin + plotAreaHeight.
-                        // We want point.y = yMaxData to map to rectY = plotAreaYMin.
-                        // The linear mapping is rectY = A * point.y + B.
-                        // At yMinData: plotAreaYMin + plotAreaHeight = A * yMinData + B
-                        // At yMaxData: plotAreaYMin = A * yMaxData + B
-                        // Subtracting the second from the first: plotAreaHeight = A * (yMinData - yMaxData) => A = plotAreaHeight / (yMinData - yMaxData) = -plotAreaHeight / (yMaxData - yMinData).
-                        // From the second equation: B = plotAreaYMin - A * yMaxData = plotAreaYMin - (-plotAreaHeight / (yMaxData - yMinData)) * yMaxData = plotAreaYMin + plotAreaHeight * yMaxData / (yMaxData - yMinData).
-                        // So, rectY = -plotAreaHeight / (yMaxData - yMinData) * point.y + plotAreaYMin + plotAreaHeight * yMaxData / (yMaxData - yMinData)
-                        // rectY = plotAreaYMin + (plotAreaHeight / (yMaxData - yMinData)) * (yMaxData - point.y)
                         const rectY = plotAreaYMin + (plotAreaHeight / (yMaxData - yMinData)) * (yMaxData - point.y);
 
                         const color = colorScale(contourType === 'u_x' ? point.U_x : point.U_y);
@@ -251,15 +230,12 @@ function BoundaryLayerSimulation({ onBack }) {
                                 key={i}
                                 x={rectX}
                                 y={rectY}
-                                width={rectWidth}
-                                height={rectHeight}
+                                width={rectWidth + 0.5}
+                                height={rectHeight + 0.5}
                                 fill={color}
-                                // Optional: subtle border between cells
-                                stroke="#f0f0f0" // Keep border for debugging
-                                strokeWidth="0.5" // Keep border for debugging
                             />
                         );
-                    })}
+                    }).filter(Boolean)} {/* Filter out null entries from skipped bottom row */}
 
                     {/* Velocity Profile Arrows and Curves */}
                     {/* Render only if U_x contour is active or no contour is active */}
@@ -282,7 +258,7 @@ function BoundaryLayerSimulation({ onBack }) {
                             markerHeight="5"
                             orient="auto"
                           >
-                            <path d="M0,-5L10,0L0,5Z" fill="#00ffff" /> {/* Bright cyan arrowhead */}
+                            <path d="M0,-5L10,0L0,5Z" fill="#ff3333" /> {/* Brighter red arrowhead */}
                           </marker>
 
                           {targetXValues.map((targetX) => {
@@ -333,8 +309,8 @@ function BoundaryLayerSimulation({ onBack }) {
                                   y1={startY}
                                   x2={endX}
                                   y2={endY}
-                                  stroke="#00ffff" // Bright cyan horizontal line
-                                  strokeWidth="1.5" // Make slightly thicker
+                                  stroke="#ff3333" // Brighter red horizontal line
+                                  strokeWidth="2" // Made slightly thicker for better visibility
                                   markerEnd="url(#profileArrowhead)" // Add arrowhead at the end
                                 />
                               );
@@ -381,8 +357,8 @@ function BoundaryLayerSimulation({ onBack }) {
                                         <path
                                             d={profileLine}
                                             fill="none"
-                                            stroke="#00ffff" // Bright cyan profile line
-                                            strokeWidth="1.5" // Make slightly thicker
+                                            stroke="#ff3333" // Brighter red profile line
+                                            strokeWidth="2" // Made slightly thicker for better visibility
                                         />
                                     )} {/* Draw the smoothed profile curve */}
                                      {/* Optional: Mark the boundary layer height with a horizontal dashed line */}
@@ -461,21 +437,12 @@ function BoundaryLayerSimulation({ onBack }) {
               })()}              
 
               {/* X-axis grid lines and labels */}
-              {/* Removed grid lines as requested */}
-              {[0.5, 1, 2, 3, 4, 5].map((x, i) => (
+              {[0.01, 1, 2, 3, 4, 5].map((x, i) => (
                 <g key={`x-${i}`}>
-                  {/* <line
-                    x1={50 + ((x - 0.5) / 4.5) * 700}
-                    y1="50"
-                    x2={50 + ((x - 0.5) / 4.5) * 700}
-                    y2="550"
-                    stroke="#cccccc" // Light grey grid lines
-                    strokeWidth="1"
-                  /> */}
                   <text
-                    x={50 + ((x - 0.5) / 4.5) * 700}
+                    x={50 + ((x - xMinData) / (xMaxData - xMinData)) * 700}
                     y="570"
-                    className="text-xs fill-[#333333]" // Dark axis labels
+                    className="text-xs fill-[#333333]"
                     textAnchor="middle"
                   >
                     {x}
